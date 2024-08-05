@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Three.js 3D Scene with Span</title>
+    <style>
+        body {
+            margin: 0;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        .label {
+            position: absolute;
+            background-color: white;
+            padding: 5px;
+            border: 1px solid black;
+            border-radius: 3px;
+            transform: translate(-50%, -50%);
+        }
+    </style>
+</head>
+
+<body>
+    <div id="container"></div>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "./three/build/three.module.js",
+                "three/addons/": "./three/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+
+        import * as THREE from 'three';
+        // 帧率统计
+        import Stats from 'three/addons/libs/stats.module.js';
+        // 加载模型
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        import { Octree } from 'three/addons/math/Octree.js';
+        import { OctreeHelper } from 'three/addons/helpers/OctreeHelper.js';
+        import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+        // 胶囊体形状类
+        import { Capsule } from 'three/addons/math/Capsule.js';
+
+
+        // 创建场景，相机和渲染器
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // 创建 CSS2DRenderer
+        const labelRenderer = new CSS2DRenderer();
+        labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        labelRenderer.domElement.style.position = 'absolute';
+        labelRenderer.domElement.style.top = '0px';
+        document.body.appendChild(labelRenderer.domElement);
+  // 环境光
+  const fillLight1 = new THREE.HemisphereLight(0x8dc1de, 0x00668d, 1.5);
+        fillLight1.position.set(2, 1, 1);
+        scene.add(fillLight1);
+
+        // 方向光白色
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 2.5);
+        directionalLight.position.set(-5, 10, 2);
+        // 设置阴影
+        directionalLight.castShadow = true;
+        directionalLight.shadow.camera.near = 0.01;
+        directionalLight.shadow.camera.far = 500;
+        directionalLight.shadow.camera.right = 30;
+        directionalLight.shadow.camera.left = - 30;
+        directionalLight.shadow.camera.top = 30;
+        directionalLight.shadow.camera.bottom = - 30;
+        directionalLight.shadow.mapSize.width = 1024;
+        directionalLight.shadow.mapSize.height = 1024;
+        directionalLight.shadow.radius = 4;
+        directionalLight.shadow.bias = - 0.00006;
+        scene.add(directionalLight);
+        // 加载 GLTF 模型
+        const loader = new GLTFLoader();
+        loader.load('./models/B1F_top.glb', (gltf) => {
+            gltf.scene.traverse(child => {
+                if (child.isMesh && child.parent.name == 'chewei') {
+        
+                }
+            });
+            scene.add(gltf.scene);
+        }, undefined, (error) => {
+            console.error('An error occurred', error);
+        });
+
+        camera.position.z = 0;
+        camera.position.y = 40;
+        const controls = new OrbitControls(camera, renderer.domElement)
+        controls.enableDamping = true; // 启用阻尼
+controls.dampingFactor = 0.25;
+controls.screenSpacePanning = false;
+controls.minDistance = 1;
+controls.maxDistance = 100;
+controls.maxPolarAngle = Math.PI / 2;
+  controls.update()
+        // 渲染循环
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update()
+            renderer.render(scene, camera);
+            // labelRenderer.render(scene, camera);
+            
+        }
+
+        animate();
+    </script>
+</body>
+
+</html>

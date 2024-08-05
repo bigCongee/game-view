@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<style>
+    * {
+        padding: 0;
+        margin: 0;
+    }
+
+    body {
+        position: relative;
+    }
+
+    #joystick-box {
+        position: absolute;
+        bottom: 0;
+        left: 50%;
+        width: 200px;
+        height: 200px;
+        z-index: 999;
+    }
+
+    .packing-label {
+        padding: 10px 20px;
+        font-size: 20px;
+        background-color: red;
+        border-radius: 10px;
+        color: #fff;
+    }
+</style>
+
+<body>
+    <div id="container"></div>
+    <div id="joystick-box"></div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "./three/build/three.module.js",
+                "three/addons/": "./three/jsm/"
+            }
+        }
+    </script>
+    <script src="./joy.min.js"></script>
+
+    <script type="module">
+
+        import * as THREE from 'three';
+        // 帧率统计
+        import Stats from 'three/addons/libs/stats.module.js';
+        // 加载模型
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+
+        // import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        import { Octree } from 'three/addons/math/Octree.js';
+        import { OctreeHelper } from 'three/addons/helpers/OctreeHelper.js';
+        // import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+        import { CSS3DRenderer, CSS3DObject, CSS3DSprite } from 'three/addons/renderers/CSS3DRenderer.js';
+        // 胶囊体形状类
+        import { Capsule } from 'three/addons/math/Capsule.js';
+
+        import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
+        const clock = new THREE.Clock();
+
+        const scene = new THREE.Scene();
+
+        // 创建八叉树
+        const worldOctree = new Octree();
+
+        // 透视相机:近大远小
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        // 相机旋转顺序
+        camera.rotation.order = 'YXZ';
+
+        // 环境光
+        const fillLight1 = new THREE.HemisphereLight(0x8dc1de, 0x00668d, 1.5);
+        fillLight1.position.set(2, 1, 1);
+        scene.add(fillLight1);
+
+        // 方向光白色
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 2.5);
+        directionalLight.position.set(-5, -10, 2);
+        // 设置阴影
+        directionalLight.castShadow = true;
+        directionalLight.shadow.camera.near = 0.01;
+        directionalLight.shadow.camera.far = 500;
+        directionalLight.shadow.camera.right = 30;
+        directionalLight.shadow.camera.left = - 30;
+        directionalLight.shadow.camera.top = 30;
+        directionalLight.shadow.camera.bottom = - 30;
+        directionalLight.shadow.mapSize.width = 1024;
+        directionalLight.shadow.mapSize.height = 1024;
+        directionalLight.shadow.radius = 4;
+        directionalLight.shadow.bias = - 0.00006;
+        scene.add(directionalLight);
+
+        const container = document.getElementById('container');
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setAnimationLoop(animate);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.VSMShadowMap;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        container.appendChild(renderer.domElement);
+
+        const mouse = new THREE.Vector2();
+        const gui = new GUI({ width: 200 });
+
+        const dracoLoader = new DRACOLoader();
+        dracoLoader.setDecoderPath('./models/');
+        // const geometry = new THREE.BoxGeometry(0.5, 0.5, 0.5);
+        // const material = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+        // const cube = new THREE.Mesh(geometry, material);
+        // cube.position.set(0, 1, -2)
+        // scene.add(cube);
+        let labels = []
+        const loader = new GLTFLoader().setPath('./models/');
+        loader.setDRACOLoader(dracoLoader);
+        loader.load('B1F_box.glb', (gltf) => {
+            gltf.scene.traverse(child => {
+                if (child.isMesh && child.parent.type == 'Group'&&child.name.includes('B1F_CW')) {
+                //           if (child.name != '203') return
+                    // 创建一个 span 元素
+                    const span = document.createElement('div');
+                    span.className = 'packing-label';
+                    span.textContent = child.name
+                    // 创建 CSS3DSprite 并将其添加到场景中
+                    const label = new CSS3DSprite(span);
+                    label.scale.set(1 / 100, 1 / 100, 1 / 100)
+                    const worldPosition = new THREE.Vector3();
+                     child.getWorldPosition(worldPosition);
+                    // worldPosition.x = Number((worldPosition.x+'').slice(0,7))
+                    // worldPosition.y = Number((worldPosition.y+'').slice(0,7))
+                    // worldPosition.z =  Number((worldPosition.z+'').slice(0,7))
+                    label.position.copy(worldPosition);
+                    // console.log(label.position,'label.position');
+                    child.parent.add(label);
+                    span.addEventListener('click', function(e) {
+                    console.log(e);
+                    });
+                    labels.push(label);
+                }
+
+
+                // const packLabelName = child.name.replace('$$parking-ceil$$', '')
+                // if (child.isMesh && child.name.includes('$$parking-ceil$$') && Number(packLabelName)) {
+                //     // if (packLabelName != '186') return
+                //     // 创建一个 span 元素
+                //     const span = document.createElement('div');
+                //     span.className = 'packing-label';
+                //     span.textContent = packLabelName
+                //     // 创建 CSS3DSprite 并将其添加到场景中
+                //     const label = new CSS3DSprite(span);
+                //     label.scale.set(1 / 300, 1 / 300, 1 / 300)
+                //     const worldPosition = new THREE.Vector3();
+                //      child.getWorldPosition(worldPosition);
+                //     worldPosition.x =  parseInt(worldPosition.x)+1
+                //     worldPosition.y =  parseInt(worldPosition.y)+0.5
+                //     worldPosition.z =  -parseInt(worldPosition.z)*3
+                //     label.position.copy(worldPosition);
+                //     // console.log(label.position,'label.position');
+                //     child.add(label);
+                //     span.addEventListener('click', function(e) {
+                //     console.log(e);
+                //     });
+                //     labels.push(label);
+                // }
+            });
+            scene.add(gltf.scene);
+
+            //     const span = document.createElement('div');
+            //     span.className = 'packing-label';
+            //     span.textContent = '测试哈哈'
+            //     // 创建 CSS3DSprite 并将其添加到场景中
+            //     const label = new CSS3DSprite(span);
+            //     label.scale.set(1 / 300, 1 / 300, 1 / 300)
+            // const position = new THREE.Vector3(0,1.16,-2.72);
+            //     label.position.set(position.x, position.y, position.z);
+            //     scene.add(label);
+            //     gui.add(label.position, 'x',-10,10)
+            //     gui.add(label.position, 'y',-10,10)
+            //     gui.add(label.position, 'z',-10,10)
+
+            console.log(scene, 'scene');
+
+
+        }, undefined, (error) => {
+            console.error('An error occurred', error);
+        });
+
+
+
+        /**
+         * 添加标签：dom方式
+         * @param {*} targePosition ：需要传递当前标签的位置
+         * @param {*} targetId ：标签对应的dom的唯一ID，暂且用时间戳代替，避免重复
+         * @param {*} innerHTML ：标签对应html
+         */
+        export function labelTag(camera, targePosition, targetId, innerHTML, webGLdom) {
+            const { width, height } = webGLdom.getBoundingClientRect();
+            let worldVector = new THREE.Vector3(targePosition.x, targePosition.y, targePosition.z);
+            let vector = worldVector.project(camera);
+            let halfWidth = width / 2,
+                halfHeight = height / 2;
+            let x = Math.round(vector.x * halfWidth + halfWidth);
+            let y = Math.round(-vector.y * halfHeight + halfHeight);
+            /**
+             * 更新立方体元素位置
+             */
+            let div = document.getElementById(targetId);
+            div.style.left = x + 'px';
+            div.style.top = y + 'px';
+            // div.innerHTML = `uuid:${innerHTML.uuid}`;
+        }
+        const Joy3 = new JoyStick('joystick-box', {}, function (data) {
+            // console.log(data);
+            // camera.position.x =data.x
+            // camera.position.z =data.z
+        });
+        // 创建一个胶囊体,用与表示碰撞体
+        const playerCollider = new Capsule(new THREE.Vector3(0, 0.35, 0), new THREE.Vector3(0, 1, 0), 0.35);
+
+        // 位置向量
+        const playerVelocity = new THREE.Vector3();
+        // 位置方向
+        const playerDirection = new THREE.Vector3();
+
+        let playerOnFloor = false;
+
+        // 前后移动
+        function getForwardVector() {
+            camera.getWorldDirection(playerDirection);
+            playerDirection.y = 0;
+            playerDirection.normalize();
+
+            return playerDirection;
+
+        }
+        // 左右移动
+        function getSideVector() {
+            camera.getWorldDirection(playerDirection);
+            playerDirection.y = 0;
+            playerDirection.normalize();
+            playerDirection.cross(camera.up);
+            return playerDirection;
+        }
+        // 定义一个全局的射线发射器
+        const raycaster = new THREE.Raycaster();
+
+        function playerCollisions() {
+            const playerPosition = playerCollider.start.clone();
+            const playerDirection = playerVelocity.clone().normalize();
+
+            // 设置射线的起点和方向
+            raycaster.set(playerPosition, playerDirection);
+
+            // 获取射线与场景中对象的交点
+            const intersects = raycaster.intersectObjects(scene.children, true);
+
+            // 初始化为不在地面上
+            playerOnFloor = false;
+
+            if (intersects.length > 0) {
+                const intersection = intersects[0]; // 取最近的碰撞点
+                const distance = intersection.distance;
+
+                // 根据需要调整距离阈值，以确定碰撞响应
+                if (distance < 1.0) {
+                    const normal = intersection.face.normal;
+                    playerOnFloor = normal.y > 0;
+
+                    if (!playerOnFloor) {
+                        playerVelocity.addScaledVector(normal, - normal.dot(playerVelocity));
+                    }
+
+                    playerCollider.translate(normal.multiplyScalar(1.0 - distance - 0.2));
+                }
+            }
+        }
+
+        // 加了阻尼就可以不用重置了,因为阻尼计算表达式就计算了速度,不知道是为什么
+        function updatePlayer(deltaTime) {
+            // 阻尼
+            let damping = Math.exp(- 4 * deltaTime) - 1;
+            playerVelocity.addScaledVector(playerVelocity, damping);
+
+            const deltaPosition = playerVelocity.clone().multiplyScalar(deltaTime);
+            // 移动碰撞体
+            playerCollider.translate(deltaPosition);
+
+            // 碰撞检测
+            playerCollisions();
+
+            // 将相机移动到碰撞体的位置
+            camera.position.copy(playerCollider.end);
+        }
+
+        function controls(deltaTime) {
+
+            const speedDelta = deltaTime * 8;
+            // 获取摇杆的输入
+            const joystickX = Joy3.GetX();
+            const joystickY = Joy3.GetY();
+
+            // 计算相机的移动
+            if (joystickX !== 0) {
+                playerVelocity.add(getSideVector().multiplyScalar(Math.sign(joystickX) * speedDelta));
+            }
+            if (joystickY !== 0) {
+                playerVelocity.add(getForwardVector().multiplyScalar(Math.sign(joystickY) * speedDelta));
+            }
+
+        }
+
+        // 帧率监控组件
+        const stats = new Stats();
+        stats.domElement.style.position = 'absolute';
+        stats.domElement.style.top = '0px';
+        container.appendChild(stats.domElement);
+
+        // 八叉树辅助工具
+        const helper = new OctreeHelper(worldOctree);
+        helper.visible = true;
+        scene.add(helper);
+
+        // 创建 CSS3DRenderer
+        const labelRenderer = new CSS3DRenderer();
+        labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        labelRenderer.domElement.style.position = 'absolute';
+        labelRenderer.domElement.style.top = '0px';
+        labelRenderer.domElement.style.pointerEvents = 'none';
+        // 设置直接子元素的直接子元素的 pointer-events 为 none
+        Array.from(labelRenderer.domElement.children).forEach(child => {
+            Array.from(child.children).forEach(grandchild => {
+                grandchild.style.pointerEvents = 'none';
+            });
+        });
+        document.body.appendChild(labelRenderer.domElement);
+
+        // 循环动画函数
+        function animate() {
+            const frameTime = clock.getDelta();
+            controls(frameTime)
+            updatePlayer(frameTime)
+
+            renderer.render(scene, camera);
+            // 渲染标签
+            labelRenderer.render(scene, camera);
+
+            // // 计算每个标签与相机的距离
+            // const distances = labels.map(label => {
+            //     const distance = camera.position.distanceTo(label.position);
+            //     return { label, distance };
+            // });
+
+            // // 按距离排序
+            // distances.sort((a, b) => a.distance - b.distance);
+
+            // // 设置可见性，显示最近的5个标签
+            // distances.forEach((item, index) => {
+            //     if (index === 0) {
+            //         // console.log(item);
+            //     }
+            //     item.label.element.style.display = index < 10 ? 'block' : 'none';
+            // });
+
+
+            stats.update();
+        }
+        let actObj;
+        container.addEventListener('click', (event) => {
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = - (event.clientY / window.innerHeight) * 2 + 1;
+            const raycaster = new THREE.Raycaster();
+
+            // 射线碰撞检测,判断鼠标指向的对象
+            raycaster.setFromCamera(mouse, camera);
+
+            const intersects = raycaster.intersectObjects(scene.children, true);
+            if (intersects.length > 0) {
+                let currentObj = intersects[0].object
+                // if (currentObj.parent.name !== 'chewei') return
+                if (!currentObj.name.includes('$$parking-ceil$$')) return
+                console.log(currentObj.position);
+                console.log(currentObj.name, 'currentObj.name');
+                console.log(currentObj.parent.name, 'currentObj.parent.name');
+                if (actObj != intersects[0].object) {
+                    if (actObj) {
+                        // 还原之前选中对象的颜色
+                        actObj.material.emissive.setHex(actObj.currentHex);
+                    }
+
+                    actObj = intersects[0].object;
+
+                    // 复制一个新的材质实例，确保只修改当前对象的颜色
+                    actObj.material = actObj.material.clone();
+                    actObj.currentHex = actObj.material.emissive.getHex();
+                    actObj.material.emissive.setHex(0xff0000);
+                    return
+                }
+            }
+            if (actObj) {
+                actObj.material.emissive.setHex(actObj.currentHex);
+                actObj = null;
+            }
+        });
+
+
+        let isMove = false
+        container.addEventListener('mousedown', (event) => {
+            isMove = true
+        });
+        container.addEventListener('mouseup', (event) => {
+            isMove = false
+        });
+        container.addEventListener('mousemove', (event) => {
+            if (!isMove) return
+            camera.rotation.y -= event.movementX / 500;
+            camera.rotation.x -= event.movementY / 500;
+        });
+
+
+        //         // 初始化 CSS3DRenderer 并添加到 DOM
+        //         labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        //         labelRenderer.domElement.style.position = 'absolute';
+        //         labelRenderer.domElement.style.top = '0px';
+        //         document.body.appendChild(labelRenderer.domElement);
+
+        // new OrbitControls(camera, labelRenderer.domElement);
+    </script>
+</body>
+
+</html>
